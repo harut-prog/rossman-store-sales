@@ -11,3 +11,8 @@ wheels/
 
 # CatBoost temprorary logs
 catboost_info/
+
+best_model/
+best_scaler/
+best_imputer/
+best_config.json

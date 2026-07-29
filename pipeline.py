@@ -138,7 +138,8 @@ def get_period_config(n_weeks: int) -> dict:
 
 def aggregate_bucket(full_df: pd.DataFrame, n_weeks: int, agg_dict: dict) -> pd.DataFrame:
     tmp = full_df.copy()
-    tmp["WeekNum"] = tmp["Week"].rank(method="dense").astype(int) - 1
+    global_min_week = tmp["Week"].min()
+    tmp["WeekNum"] = (tmp["Week"] - global_min_week).apply(lambda x: x.n)
     tmp["Bucket"] = tmp["WeekNum"] // n_weeks
     tmp = tmp.drop(columns=["WeekNum"])
 
@@ -177,10 +178,10 @@ def add_target_features(data: pd.DataFrame, n_weeks: int) -> pd.DataFrame:
     for periods in cfg['pct_change']:
         weeks_back = periods * n_weeks
         data[f'SalesPctChange{weeks_back}w'] = data.groupby('Store')['Sales'].transform(
-            lambda s: s.pct_change(periods).replace(np.inf, np.nan)
+            lambda s: s.shift(1).pct_change(periods).replace(np.inf, np.nan)
         )
         data[f'SalesDiff{weeks_back}w'] = data.groupby('Store')['Sales'].transform(
-            lambda s: s.diff(periods)
+            lambda s: s.shift(1).diff(periods)
         )
 
     return data
@@ -194,29 +195,42 @@ def predict(
 ) -> pd.DataFrame:
     feature_cols = get_target_feature_cols(n_weeks)
     drop_cols = ['Sales', 'Date', 'Bucket']
+    
+    last_known_bucket = data.groupby('Store')['Bucket'].max().to_dict()
     data = add_target_features(data, n_weeks)
 
     for _ in range(n_steps):
-        X_step = data.drop(columns=drop_cols).dropna(subset=feature_cols)
-        y_pred = model.predict(X_step)
-
-        X_step['Sales'] = y_pred
-        X_step['Date'] = data['Date'].max() + pd.Timedelta(days=n_weeks*7)
-        X_step['Bucket'] = data['Bucket'].max() + 1
-
-        data = pd.concat([data, X_step], ignore_index=True)
-
+        current_idx = data.groupby('Store')['Bucket'].idxmax()
+        X_step = data.loc[current_idx].copy()
+        X_step = X_step.dropna(subset=feature_cols)
+        
+        X_pred = X_step.drop(columns=drop_cols, errors='ignore')
+        y_pred = model.predict(X_pred)
+        
+        new_rows = X_step.copy()
+        new_rows['Sales'] = y_pred
+        last_dates = data.groupby('Store')['Date'].max()
+        new_rows['Date'] = new_rows['Store'].map(last_dates) + pd.Timedelta(days=n_weeks * 7)
+        
+        data = pd.concat([data, new_rows], ignore_index=True)
         data = add_target_features(data, n_weeks)
-
-    pred_final = data.set_index(['Store', 'Bucket'])[['Sales']].reset_index()
-
+    
+    pred_mask = data.apply(lambda row: row['Bucket'] > last_known_bucket.get(row['Store'], -1), axis=1)
+    pred_final = (
+        data[pred_mask]
+        .set_index(['Store', 'Bucket'])[['Sales', 'Date']]
+        .reset_index()
+    )
+    
     return pred_final
 
 
-def load_history(user_min_date: pd.Timestamp) -> pd.DataFrame:
+def load_history(user_min_date: pd.Timestamp) -> pd.DataFrame:    
     df = pd.read_csv('history.csv', parse_dates=["Date"], low_memory=False)
-    cutoff = user_min_date - pd.Timedelta(days=180)
-    return df[df["Date"] >= cutoff].reset_index(drop=True)
+    cutoff = user_min_date - pd.Timedelta(days=365)
+    df = df[df["Date"] >= cutoff].reset_index(drop=True)
+    
+    return df
 
 
 def run_pipeline(

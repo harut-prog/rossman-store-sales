@@ -1,6 +1,8 @@
 FROM python:3.12-bookworm
 WORKDIR /app
 
+ENV PYTHONWARNINGS=ignore
+
 COPY pyproject.toml uv.lock ./
 
 RUN pip install --no-cache-dir uv && \

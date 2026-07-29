@@ -22,3 +22,10 @@ dependencies = [
     "shap>=0.52.0",
     "uvicorn>=0.51.0",
 ]
+
+[dependency-groups]
+deploy = [
+    "fastapi>=0.140.0",
+    "lightgbm>=4.6.0",
+    "pandas>=2.3.3",
+]

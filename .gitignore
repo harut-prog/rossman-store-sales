@@ -12,5 +12,7 @@ wheels/
 # CatBoost temprorary logs
 catboost_info/
 
+# Other files and directories
 best_model/
 test/
+history.csv

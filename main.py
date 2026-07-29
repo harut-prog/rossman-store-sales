@@ -13,9 +13,6 @@ model, scaler, imputer, config = load_artifacts()
 
 @app.post("/predict")
 async def predict(data: UploadFile = File()):
-    if not data.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(400, detail="Поддерживаются только файлы .xlsx или .xls")
-
     content = await data.read()
     try:
         df = pd.read_excel(BytesIO(content), parse_dates=["Date"])
@@ -32,7 +29,7 @@ async def predict(data: UploadFile = File()):
         raise HTTPException(500, detail=f"Ошибка при обработке: {e}")
 
     if result.empty:
-        raise HTTPException(400, detail="Не удалось сделать предсказание — недостаточно данных")
+        raise HTTPException(400, detail="Не удалось сделать предсказание, недостаточно данных")
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:

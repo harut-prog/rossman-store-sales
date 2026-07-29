@@ -118,7 +118,7 @@ def preprocess(df: pd.DataFrame, scaler, imputer, config: dict) -> pd.DataFrame:
     for col in ["CompetitionMonths", "SchoolHolidaySum7", "SchoolHolidaySum28"]:
         X_restored[col] = X_restored[col].astype(int)
 
-    result = df[cat_features + bool_features + ["Sales", "Date"]].copy()
+    result = df[cat_features + bool_features + ["Sales", "Date"]]
     result = result.join(X_restored)
 
     return result[target_columns + ["Sales", "Date"]]
@@ -192,46 +192,30 @@ def predict(
     n_steps: int,
     n_weeks: int,
 ) -> pd.DataFrame:
-    drop_cols = ["Sales", "Date", "Bucket"]
-
-    data = data.sort_values(["Store", "Date"])
+    feature_cols = get_target_feature_cols(n_weeks)
+    drop_cols = ['Sales', 'Date', 'Bucket']
     data = add_target_features(data, n_weeks)
 
-    last_bucket = data["Bucket"].max()
-    predicted_index = []
+    for _ in range(n_steps):
+        X_step = data.drop(columns=drop_cols).dropna(subset=feature_cols)
+        y_pred = model.predict(X_step)
 
-    for step in range(1, n_steps + 1):
-        bucket_num = last_bucket + step
-        prior_bucket = last_bucket if step == 1 else bucket_num - 1
-        prior = data[data["Bucket"] == prior_bucket].copy()
+        X_step['Sales'] = y_pred
+        X_step['Date'] = data['Date'].max() + pd.Timedelta(days=n_weeks*7)
+        X_step['Bucket'] = data['Bucket'].max() + 1
 
-        placeholder = prior.copy()
-        placeholder["Bucket"] = bucket_num
-        placeholder["Sales"] = np.nan
-        placeholder["Date"] = placeholder["Date"] + pd.Timedelta(days=n_weeks * 7)
+        data = pd.concat([data, X_step], ignore_index=True)
 
-        data = pd.concat([data, placeholder], ignore_index=True)
         data = add_target_features(data, n_weeks)
 
-        mask = data["Bucket"] == bucket_num
-        X_step = data.loc[mask].drop(columns=drop_cols)
+    pred_final = data.set_index(['Store', 'Bucket'])[['Sales']].reset_index()
 
-        pred = model.predict(X_step)
-        data.loc[X_step.index, "Sales"] = pred
-        predicted_index.extend(X_step.index)
-
-    result = data.loc[predicted_index, ["Store", "Date", "Sales"]].reset_index(drop=True)
-    
-    return result
-
-
-HISTORY_PATH = "history.csv"
-HISTORY_BUFFER_DAYS = 180
+    return pred_final
 
 
 def load_history(user_min_date: pd.Timestamp) -> pd.DataFrame:
-    df = pd.read_csv(HISTORY_PATH, parse_dates=["Date"], low_memory=False)
-    cutoff = user_min_date - pd.Timedelta(days=HISTORY_BUFFER_DAYS)
+    df = pd.read_csv('history.csv', parse_dates=["Date"], low_memory=False)
+    cutoff = user_min_date - pd.Timedelta(days=180)
     return df[df["Date"] >= cutoff].reset_index(drop=True)
 
 
@@ -244,7 +228,6 @@ def run_pipeline(
 ) -> pd.DataFrame:
     history = load_history(df_input["Date"].min())
     df = pd.concat([history, df_input], ignore_index=True)
-    df = df.drop_duplicates(subset=["Store", "Date"]).sort_values("Date").reset_index(drop=True)
 
     df = feature_engineering(df)
     df = preprocess(df, scaler, imputer, config)

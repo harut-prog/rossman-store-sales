@@ -21,6 +21,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "shap>=0.52.0",
     "uvicorn>=0.51.0",
+    "psycopg2>=2.9.12",
 ]
 
 [dependency-groups]

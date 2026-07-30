@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir uv && \
 
 COPY main.py pipeline.py history.csv ./
 COPY best_model ./best_model
+COPY templates ./templates
+COPY static ./static
 
 EXPOSE 8000
 

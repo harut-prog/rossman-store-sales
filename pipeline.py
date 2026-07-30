@@ -209,6 +209,7 @@ def predict(
         
         new_rows = X_step.copy()
         new_rows['Sales'] = y_pred
+        new_rows['Bucket'] = new_rows['Bucket'] + 1
         last_dates = data.groupby('Store')['Date'].max()
         new_rows['Date'] = new_rows['Store'].map(last_dates) + pd.Timedelta(days=n_weeks * 7)
         

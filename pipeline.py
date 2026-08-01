@@ -34,8 +34,120 @@ def load_artifacts(model_dir="best_model"):
     return model, scaler, imputer, config
 
 
-def validate_columns(df: pd.DataFrame) -> list[str]:
-    return [c for c in REQUIRED_COLUMNS if c not in df.columns]
+def validate_columns(df: pd.DataFrame) -> dict:
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    extra = [c for c in df.columns if c not in REQUIRED_COLUMNS]
+    return {"missing": missing, "extra": extra}
+
+
+def validate_data(df: pd.DataFrame) -> list[str]:
+    errors = []
+
+    required_no_nan = {
+        "Store", "Date", "Sales", "Open", "Promo",
+        "StateHoliday", "SchoolHoliday", "StoreType", "Assortment", "Promo2",
+    }
+
+    for col in required_no_nan:
+        if col not in df.columns:
+            continue
+        nan_rows = df.index[df[col].isna()].tolist()
+        if nan_rows:
+            nums = ", ".join(str(r + 2) for r in nan_rows[:5])
+            suffix = f" и ещё {len(nan_rows) - 5}" if len(nan_rows) > 5 else ""
+            errors.append(f"Колонка '{col}': пустые значения в строках {nums}{suffix}")
+
+    if "Store" in df.columns:
+        bad = df[~df["Store"].apply(lambda x: isinstance(x, (int, float)) and x == int(x) and x > 0)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"Store: должен быть целым числом > 0 (строки {nums})")
+
+    if "Sales" in df.columns:
+        non_numeric = df[~df["Sales"].apply(lambda x: isinstance(x, (int, float)))]
+        negative = df[df["Sales"] < 0] if df["Sales"].dtype in ("int64", "float64") else pd.DataFrame()
+        if len(non_numeric):
+            nums = ", ".join(str(i + 2) for i in non_numeric.index[:5])
+            errors.append(f"Sales: должно быть числом (строки {nums})")
+        if len(negative):
+            nums = ", ".join(str(i + 2) for i in negative.index[:5])
+            errors.append(f"Sales: не может быть отрицательным (строки {nums})")
+
+    for col in ("Open", "Promo", "SchoolHoliday", "Promo2"):
+        if col in df.columns:
+            bad = df[~df[col].isin([0, 1])]
+            if len(bad):
+                nums = ", ".join(str(i + 2) for i in bad.index[:5])
+                errors.append(f"{col}: должно быть 0 или 1 (строки {nums})")
+
+    if "StateHoliday" in df.columns:
+        valid = {"0", "a", "b", "c"}
+        bad = df[~df["StateHoliday"].astype(str).isin(valid)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"StateHoliday: допустимые значения 0, a, b, c (строки {nums})")
+
+    if "StoreType" in df.columns:
+        valid = {"a", "b", "c", "d"}
+        bad = df[~df["StoreType"].astype(str).isin(valid)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"StoreType: допустимые значения a, b, c, d (строки {nums})")
+
+    if "Assortment" in df.columns:
+        valid = {"a", "b", "c"}
+        bad = df[~df["Assortment"].astype(str).isin(valid)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"Assortment: допустимые значения a, b, c (строки {nums})")
+
+    if "CompetitionDistance" in df.columns:
+        col = df["CompetitionDistance"].dropna()
+        bad = col[col < 0]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"CompetitionDistance: не может быть отрицательным (строки {nums})")
+
+    if "CompetitionOpenSinceMonth" in df.columns:
+        col = df["CompetitionOpenSinceMonth"].dropna()
+        bad = col[(col < 1) | (col > 12)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"CompetitionOpenSinceMonth: должно быть 1–12 (строки {nums})")
+
+    if "Promo2SinceWeek" in df.columns:
+        col = df["Promo2SinceWeek"].dropna()
+        bad = col[(col < 0) | (col > 53)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"Promo2SinceWeek: должно быть 0–53 (строки {nums})")
+
+    if "Promo2SinceYear" in df.columns:
+        col = df["Promo2SinceYear"].dropna()
+        bad = col[(col < 0) | ((col > 0) & (col < 1900))]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"Promo2SinceYear: должно быть 0 или >= 1900 (строки {nums})")
+
+    if "PromoInterval" in df.columns:
+        valid_months = set(MONTHS_MAP.keys())
+        def check_interval(val):
+            if pd.isna(val):
+                return True
+            parts = [p.strip() for p in str(val).split(",")]
+            return all(p in valid_months for p in parts)
+        bad = df[~df["PromoInterval"].apply(check_interval)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"PromoInterval: формат 'Jan,Apr,Jul,Oct' (строки {nums})")
+
+    if "Date" in df.columns:
+        bad = df[df["Date"].isna()]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"Date: некорректная дата (строки {nums})")
+
+    return errors
 
 
 def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
@@ -226,11 +338,15 @@ def predict(
     return pred_final
 
 
-def load_history(user_min_date: pd.Timestamp) -> pd.DataFrame:    
-    df = pd.read_csv('history.csv', parse_dates=["Date"], low_memory=False)
-    cutoff = user_min_date - pd.Timedelta(days=365)
+def load_history(user_min_date: pd.Timestamp, n_weeks: int) -> pd.DataFrame:
+    cfg = get_period_config(n_weeks)
+    min_buckets = max(max(cfg["windows"]), max(cfg["pct_change"])) + 1
+    min_days = min_buckets * n_weeks * 7
+
+    df = pd.read_csv("history.csv", parse_dates=["Date"], low_memory=False)
+    cutoff = user_min_date - pd.Timedelta(days=min_days)
     df = df[df["Date"] >= cutoff].reset_index(drop=True)
-    
+
     return df
 
 
@@ -241,7 +357,7 @@ def run_pipeline(
     imputer,
     config: dict,
 ) -> pd.DataFrame:
-    history = load_history(df_input["Date"].min())
+    history = load_history(df_input["Date"].min(), config["n_weeks"])
     df = pd.concat([history, df_input], ignore_index=True)
 
     df = feature_engineering(df)

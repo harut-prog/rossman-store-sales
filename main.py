@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from pipeline import load_artifacts, run_pipeline, validate_columns
+from pipeline import load_artifacts, run_pipeline, validate_columns, validate_data
 
 
 app = FastAPI()
@@ -28,9 +28,15 @@ async def predict(data: UploadFile = File()):
     except Exception as e:
         raise HTTPException(400, detail=f"Ошибка чтения Excel файла: {e}")
 
-    missing = validate_columns(df)
-    if missing:
-        raise HTTPException(400, detail=f"Отсутствуют колонки: {', '.join(missing)}")
+    cols = validate_columns(df)
+    if cols["missing"]:
+        raise HTTPException(400, detail=f"Отсутствуют колонки: {', '.join(cols['missing'])}")
+    if cols["extra"]:
+        raise HTTPException(400, detail=f"Лишние колонки (не требуются): {', '.join(cols['extra'])}")
+
+    errors = validate_data(df)
+    if errors:
+        raise HTTPException(400, detail="Ошибки в данных:\n" + "\n".join(errors))
 
     try:
         result = run_pipeline(df, model, scaler, imputer, config)

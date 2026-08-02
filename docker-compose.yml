@@ -4,8 +4,24 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ts_api
-    ports:
-      - "8000:8000"
     environment:
       - PYTHONWARNINGS=ignore
-    restart: unless-stopped
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  db:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:

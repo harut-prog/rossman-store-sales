@@ -21,7 +21,6 @@ dependencies = [
     "seaborn>=0.13.2",
     "shap>=0.52.0",
     "uvicorn>=0.51.0",
-    "psycopg2>=2.9.12",
 ]
 
 [dependency-groups]
@@ -30,4 +29,7 @@ deploy = [
     "jinja2>=3.1.0",
     "lightgbm>=4.6.0",
     "pandas>=2.3.3",
+    "psycopg2>=2.9.12",
+    "psycopg2-binary>=2.9.12",
+    "sqlalchemy>=2.0.51",
 ]

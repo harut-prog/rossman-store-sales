@@ -6,6 +6,12 @@ import pandas as pd
 from lightgbm import LGBMRegressor
 from skops.io import get_untrusted_types, load as skops_load
 
+import os
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 REQUIRED_COLUMNS = [
     "Store", "Date", "Sales", "Open", "Promo", "StateHoliday", "SchoolHoliday",
@@ -342,10 +348,23 @@ def load_history(user_min_date: pd.Timestamp, n_weeks: int) -> pd.DataFrame:
     cfg = get_period_config(n_weeks)
     min_buckets = max(max(cfg["windows"]), max(cfg["pct_change"])) + 1
     min_days = min_buckets * n_weeks * 7
-
-    df = pd.read_csv("history.csv", parse_dates=["Date"], low_memory=False)
     cutoff = user_min_date - pd.Timedelta(days=min_days)
-    df = df[df["Date"] >= cutoff].reset_index(drop=True)
+
+    url = os.getenv("DATABASE_URL")
+    engine = create_engine(url)
+    query = """
+        SELECT *
+        FROM history
+        WHERE DATE >= %s
+    """
+
+    with engine.connect() as conn:
+        df = pd.read_sql_query(
+            query,
+            conn,
+            params=(cutoff,),
+            parse_dates=["Date"]
+        )
 
     return df
 

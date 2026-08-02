@@ -8,7 +8,7 @@ COPY pyproject.toml uv.lock ./
 RUN pip install --no-cache-dir uv && \
     uv sync --frozen --no-default-groups --group deploy
 
-COPY main.py pipeline.py history.csv ./
+COPY main.py pipeline.py ./
 COPY best_model ./best_model
 COPY templates ./templates
 COPY static ./static

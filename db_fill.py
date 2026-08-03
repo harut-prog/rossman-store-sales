@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.extras
 import pandas as pd
 
 import os
@@ -41,24 +42,34 @@ with psycopg2.connect(
                 PromoInterval VARCHAR(32),
 
                 CONSTRAINT pk_unique UNIQUE (Store, Date)
-            )
+            );
+
+            CREATE INDEX idx_history_date ON history (Date);
             """
         )
 
+        records = []
         for _, row in data.iterrows():
-            cur.execute(
-                """
-                INSERT INTO history
-                VALUES (%s, %s, %s, %s, %s, %s::boolean, %s::boolean, %s, %s::boolean, %s, %s, %s, %s, %s, %s::boolean, %s, %s, %s)
-                """,
-                (
-                    row["Store"],row["DayOfWeek"],row["Date"],row["Sales"],
-                    row["Customers"],row["Open"],row["Promo"],row["StateHoliday"],
-                    row["SchoolHoliday"],row["StoreType"],row["Assortment"],
-                    row["CompetitionDistance"],row["CompetitionOpenSinceMonth"],
-                    row["CompetitionOpenSinceYear"],row["Promo2"],row["Promo2SinceWeek"],
-                    row["Promo2SinceYear"],row["PromoInterval"]
-                )
-            )
+            promo_interval = row["PromoInterval"]
+            if pd.isna(promo_interval):
+                promo_interval = None
+            records.append((
+                row["Store"], row["DayOfWeek"], row["Date"], row["Sales"],
+                row["Customers"], row["Open"], row["Promo"], row["StateHoliday"],
+                row["SchoolHoliday"], row["StoreType"], row["Assortment"],
+                row["CompetitionDistance"], row["CompetitionOpenSinceMonth"],
+                row["CompetitionOpenSinceYear"], row["Promo2"], row["Promo2SinceWeek"],
+                row["Promo2SinceYear"], promo_interval
+            ))
+
+        psycopg2.extras.execute_batch(
+            cur,
+            """
+            INSERT INTO history
+            VALUES (%s, %s, %s, %s, %s, %s::boolean, %s::boolean, %s, %s::boolean, %s, %s, %s, %s, %s, %s::boolean, %s, %s, %s)
+            """,
+            records,
+            page_size=1000,
+        )
 
     conn.commit()

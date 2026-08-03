@@ -14,9 +14,9 @@ load_dotenv()
 
 
 REQUIRED_COLUMNS = [
-    "Store", "Date", "Sales", "Open", "Promo", "StateHoliday", "SchoolHoliday",
-    "StoreType", "Assortment", "CompetitionDistance",
-    "CompetitionOpenSinceMonth", "CompetitionOpenSinceYear",
+    "Store", "DayOfWeek", "Date", "Sales", "Customers", "Open", "Promo",
+    "StateHoliday", "SchoolHoliday", "StoreType", "Assortment",
+    "CompetitionDistance", "CompetitionOpenSinceMonth", "CompetitionOpenSinceYear",
     "Promo2", "Promo2SinceWeek", "Promo2SinceYear", "PromoInterval",
 ]
 
@@ -68,6 +68,22 @@ def validate_data(df: pd.DataFrame) -> list[str]:
         if len(bad):
             nums = ", ".join(str(i + 2) for i in bad.index[:5])
             errors.append(f"Store: должен быть целым числом > 0 (строки {nums})")
+
+    if "DayOfWeek" in df.columns:
+        bad = df[~df["DayOfWeek"].apply(lambda x: isinstance(x, (int, float)) and x == int(x) and 1 <= x <= 7)]
+        if len(bad):
+            nums = ", ".join(str(i + 2) for i in bad.index[:5])
+            errors.append(f"DayOfWeek: должно быть целым числом 1–7 (строки {nums})")
+
+    if "Customers" in df.columns:
+        non_numeric = df[~df["Customers"].apply(lambda x: isinstance(x, (int, float)))]
+        negative = df[df["Customers"] < 0] if df["Customers"].dtype in ("int64", "float64") else pd.DataFrame()
+        if len(non_numeric):
+            nums = ", ".join(str(i + 2) for i in non_numeric.index[:5])
+            errors.append(f"Customers: должно быть числом (строки {nums})")
+        if len(negative):
+            nums = ", ".join(str(i + 2) for i in negative.index[:5])
+            errors.append(f"Customers: не может быть отрицательным (строки {nums})")
 
     if "Sales" in df.columns:
         non_numeric = df[~df["Sales"].apply(lambda x: isinstance(x, (int, float)))]
@@ -173,8 +189,11 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         "day": 1,
     })
     diff = (df["Date"].dt.to_period("M") - comp_dates.dt.to_period("M"))
-    df["CompetitionMonths"] = diff.apply(lambda x: x.n if pd.notna(x) else np.nan)
+    df["CompetitionMonths"] = diff.apply(
+        lambda x: np.nan if pd.isna(x) else x.n
+    )
 
+    df["PromoInterval"] = df["PromoInterval"].replace({"NaN": np.nan, "": np.nan})
     df["PromoInterval"] = df["PromoInterval"].str.split(",").apply(
         lambda row: [MONTHS_MAP[x] for x in row] if isinstance(row, list) else [0]
     )
@@ -190,7 +209,7 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     df["IsPromo2Month"] = (
-        (df["Promo2"])
+        (df["Promo2"].astype(bool))
         & (df["Date"] >= df["Promo2StartDate"])
         & (df["Promo2Exists"])
     )
@@ -257,7 +276,7 @@ def get_period_config(n_weeks: int) -> dict:
 def aggregate_bucket(full_df: pd.DataFrame, n_weeks: int, agg_dict: dict) -> pd.DataFrame:
     tmp = full_df.copy()
     global_min_week = tmp["Week"].min()
-    tmp["WeekNum"] = (tmp["Week"] - global_min_week).apply(lambda x: x.n)
+    tmp["WeekNum"] = (tmp["Week"] - global_min_week).apply(lambda x: np.nan if pd.isna(x) else x.n)
     tmp["Bucket"] = tmp["WeekNum"] // n_weeks
     tmp = tmp.drop(columns=["WeekNum"])
 
@@ -344,28 +363,21 @@ def predict(
     return pred_final
 
 
-def load_history(user_min_date: pd.Timestamp, n_weeks: int) -> pd.DataFrame:
+def load_history(user_min_date: pd.Timestamp, n_weeks: int, store_ids: list) -> pd.DataFrame:
     cfg = get_period_config(n_weeks)
     min_buckets = max(max(cfg["windows"]), max(cfg["pct_change"])) + 1
     min_days = min_buckets * n_weeks * 7
-    cutoff = user_min_date - pd.Timedelta(days=min_days)
+    cutoff = pd.Timestamp(user_min_date) - pd.Timedelta(days=min_days)
 
     url = os.getenv("DATABASE_URL")
     engine = create_engine(url)
-    query = """
-        SELECT *
-        FROM history
-        WHERE DATE >= %s
-    """
+    placeholders = ", ".join(["%s"] * len(store_ids))
+    query = f"SELECT * FROM history WHERE Date >= %s AND Store IN ({placeholders})"
 
     with engine.connect() as conn:
-        df = pd.read_sql_query(
-            query,
-            conn,
-            params=(cutoff,),
-            parse_dates=["Date"]
-        )
+        df = pd.read_sql_query(query, conn, params=(cutoff, *store_ids), parse_dates=["Date"])
 
+    df.columns = REQUIRED_COLUMNS
     return df
 
 
@@ -376,14 +388,20 @@ def run_pipeline(
     imputer,
     config: dict,
 ) -> pd.DataFrame:
-    history = load_history(df_input["Date"].min(), config["n_weeks"])
+    df_input["Date"] = pd.to_datetime(df_input["Date"])
+
+    stores = df_input["Store"].unique().tolist()
+    history = load_history(df_input["Date"].min(), config["n_weeks"], stores)
     df = pd.concat([history, df_input], ignore_index=True)
+    df = df.drop_duplicates(subset=["Store", "Date"], keep="last")
 
     df = feature_engineering(df)
     df = preprocess(df, scaler, imputer, config)
     df["Week"] = df["Date"].dt.to_period("W-MON")
 
     bucketed = aggregate_bucket(df, n_weeks=config["n_weeks"], agg_dict=config["agg_dict"])
+    bucketed = bucketed[bucketed["Store"].isin(stores)]
+
     bucketed = bucketed.astype({
         "Store": "category",
         "StoreType": "category",

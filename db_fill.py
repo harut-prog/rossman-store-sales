@@ -50,16 +50,13 @@ with psycopg2.connect(
 
         records = []
         for _, row in data.iterrows():
-            promo_interval = row["PromoInterval"]
-            if pd.isna(promo_interval):
-                promo_interval = None
             records.append((
                 row["Store"], row["DayOfWeek"], row["Date"], row["Sales"],
                 row["Customers"], row["Open"], row["Promo"], row["StateHoliday"],
                 row["SchoolHoliday"], row["StoreType"], row["Assortment"],
                 row["CompetitionDistance"], row["CompetitionOpenSinceMonth"],
                 row["CompetitionOpenSinceYear"], row["Promo2"], row["Promo2SinceWeek"],
-                row["Promo2SinceYear"], promo_interval
+                row["Promo2SinceYear"], row["PromoInterval"]
             ))
 
         psycopg2.extras.execute_batch(

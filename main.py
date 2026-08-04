@@ -24,7 +24,7 @@ async def index(request: Request):
 async def predict(data: UploadFile = File()):
     content = await data.read()
     try:
-        df = pd.read_excel(BytesIO(content), parse_dates=["Date"])
+        df = pd.read_excel(BytesIO(content))
     except Exception as e:
         raise HTTPException(400, detail=f"Ошибка чтения Excel файла: {e}")
 

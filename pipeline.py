@@ -375,7 +375,7 @@ def load_history(user_min_date: pd.Timestamp, n_weeks: int, store_ids: list) -> 
     query = f"SELECT * FROM history WHERE Date >= %s AND Store IN ({placeholders})"
 
     with engine.connect() as conn:
-        df = pd.read_sql_query(query, conn, params=(cutoff, *store_ids), parse_dates=["Date"])
+        df = pd.read_sql_query(query, conn, params=(cutoff, *store_ids))
 
     df.columns = REQUIRED_COLUMNS
     return df

@@ -1,0 +1,28 @@
+stages:
+  - build
+
+variables:
+  UPSTREAM_DB_IMAGE: "postgres:17" 
+  TARGET_DB_NAME: "db"
+  TARGET_API_NAME: "ts-api"
+
+copy-db-to-yandex:
+  stage: build
+  image: quay.io/skopeo/stable:v1.14
+  script:
+    - skopeo copy 
+      --dest-creds "oauth:$YC_REGISTRY_PASSWORD" 
+      docker://$UPSTREAM_DB_IMAGE 
+      docker://$REGISTRY_ID/$TARGET_DB_NAME:latest
+
+build-api:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - echo "$YC_REGISTRY_PASSWORD" | docker login --username oauth --password-stdin cr.yandex
+    - docker build -t $REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA -f Dockerfile ./api
+    - docker push $REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA
+    - docker tag $REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA $REGISTRY_ID/$TARGET_API_NAME:latest
+    - docker push $REGISTRY_ID/$TARGET_API_NAME:latest

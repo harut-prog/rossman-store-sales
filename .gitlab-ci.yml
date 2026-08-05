@@ -9,7 +9,9 @@ variables:
 
 copy-db-to-yandex:
   stage: build
-  image: quay.io/skopeo/stable:v1.14
+  image:
+    name: quay.io/skopeo/stable:v1.14
+    entrypoint: [""]
   script:
     - >-
       skopeo copy

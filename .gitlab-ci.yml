@@ -6,6 +6,9 @@ variables:
   UPSTREAM_DB_IMAGE: "postgres:17"
   TARGET_DB_NAME: "db"
   TARGET_API_NAME: "ts-api"
+  DOCKER_HOST: "tcp://docker:2375"
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
 
 # Copies the upstream postgres image into the Yandex Cloud registry
 copy-db-to-yandex:

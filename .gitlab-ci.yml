@@ -7,18 +7,16 @@ variables:
   TARGET_DB_NAME: "db"
   TARGET_API_NAME: "ts-api"
 
+# Copies the upstream postgres image into the Yandex Cloud registry
 copy-db-to-yandex:
   stage: build
   image:
     name: quay.io/skopeo/stable:v1.14
     entrypoint: [""]
   script:
-    - >-
-      skopeo copy
-      --dest-creds "oauth:$YC_REGISTRY_PASSWORD"
-      docker://$UPSTREAM_DB_IMAGE
-      docker://$REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_DB_NAME:latest
+    - skopeo copy --dest-creds "oauth:$YC_REGISTRY_PASSWORD" docker://$UPSTREAM_DB_IMAGE docker://$REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_DB_NAME:latest
 
+# Builds and pushes the FastAPI image to the Yandex Cloud registry
 build-api:
   stage: build
   image: docker:24.0.5

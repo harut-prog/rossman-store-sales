@@ -6,16 +6,20 @@ variables:
   UPSTREAM_DB_IMAGE: "postgres:17"
   TARGET_DB_NAME: "db"
   TARGET_API_NAME: "ts-api"
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
+  REGISTRY_ID: "crp76t66v12au4b36gbk" 
 
 build-api:
   stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
   script:
-    - docker build -t $REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA -f Dockerfile .
-    - docker push $REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA
-    - docker tag $REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_API_NAME:$CI_COMMIT_SHA $REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_API_NAME:latest
-    - docker push $REGISTRY_ENDPOINT/$REGISTRY_ID/$TARGET_API_NAME:latest
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$REGISTRY_ENDPOINT\":{\"auth\":\"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - >
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination "${REGISTRY_ENDPOINT}/${REGISTRY_ID}/${TARGET_API_NAME}:${CI_COMMIT_SHA}"
+      --destination "${REGISTRY_ENDPOINT}/${REGISTRY_ID}/${TARGET_API_NAME}:latest"
+      --cache=true

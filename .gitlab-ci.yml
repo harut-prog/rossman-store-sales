@@ -7,7 +7,7 @@ variables:
   TARGET_DB_NAME: "db"
   TARGET_API_NAME: "ts-api"
   DOCKER_HOST: tcp://docker:2376
-  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_CERTDIR: ""
 
 build-api:
   stage: build

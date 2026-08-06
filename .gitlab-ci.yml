@@ -6,7 +6,7 @@ variables:
   UPSTREAM_DB_IMAGE: "postgres:17"
   TARGET_DB_NAME: "db"
   TARGET_API_NAME: "ts-api"
-  DOCKER_HOST: tcp://docker:2376
+  DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
 
 build-api:

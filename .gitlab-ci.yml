@@ -15,6 +15,7 @@ build-api:
     entrypoint: [""]
   script:
     - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n "json_key:${CI_REGISTRY_KEY}" | base64 | tr -d '\n' )\"}}}" > /kaniko/.docker/config.json
     - >
       /kaniko/executor
       --context "${CI_PROJECT_DIR}"

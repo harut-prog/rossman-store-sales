@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ts-api
+  namespace: rossmann
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ts-api
+  template:
+    metadata:
+      labels:
+        app: ts-api
+    spec:
+      imagePullSecrets:
+        - name: cr-yandex
+      containers:
+        - name: ts-api
+          image: cr.yandex/crp76t66v12au4b36gbk/ts-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 1Gi
+              cpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ts-api
+  namespace: rossmann
+spec:
+  selector:
+    app: ts-api
+  ports:
+    - port: 80
+      targetPort: 8000

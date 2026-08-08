@@ -128,7 +128,12 @@ The CI pipeline (**GitLab CI**, runner on **Kubernetes**) builds and pushes both
 | Variable | Type | Description |
 |----------|------|-------------|
 | `REGISTRY_ID` | Variable | Your Yandex Container Registry ID (e.g. `crp...`) |
-| `YC_SA_KEY` | Variable | Service account **authorized key** (JSON) with role `container-registry.images.pusher` |
+| `YC_SA_KEY` | File | Service account **authorized key** (JSON) with role `container-registry.images.pusher` |
+| `K8S_APISERVER` | Variable | K8s API endpoint (`https://<cluster-id>.yc.mcs...`) |
+| `K8S_CA_CERT` | Variable | Base64 cluster CA certificate |
+| `K8S_SA_TOKEN` | Variable | Token of the `ci-deployer` ServiceAccount |
+
+> **Why `YC_SA_KEY` as File?** GitLab substitutes a **File** variable with a path to the key JSON inside the job container; the pipeline reads it with `cat`. With a plain Variable you'd get the JSON as a string (also fine, but then `echo` — not `cat` — is correct).
 
 > **Why not OAuth tokens?** As of 2026, Yandex rejects OAuth tokens issued after `2026-06-01` for registry/`json_key` auth. A **service account authorized key** (`json_key`) is the supported, non-expiring way to authenticate in CI.
 
@@ -138,11 +143,36 @@ The CI pipeline (**GitLab CI**, runner on **Kubernetes**) builds and pushes both
 # dump schema+data on your machine
 pg_dump "postgresql://user:pass@localhost:5433/db" > history_dump.sql
 
-# restore into the managed/k8s Postgres
-psql "postgresql://user:pass@<cloud-db>:6432/db" < history_dump.sql
+# restore into the cluster Postgres
+kubectl port-forward -n rossmann svc/postgres 5432:5432
+psql "postgresql://user:pass@localhost:5432/db" < history_dump.sql
 ```
 
-Or, if you keep `history.csv` around, just run `scripts/migrate_db.py` against the cloud DB once. No DB image is ever copied by CI.
+Or, if you keep `history.csv` around, run `scripts/migrate_db.py` against the cluster DB once. No DB image is ever copied by CI.
+
+### Deploy to Kubernetes (Yandex Managed K8s)
+
+On every push to `main`, the `deploy` job applies `k8s/` manifests and rolls over images.
+
+```bash
+# 1. One-time: deploy manifest objects + namespace
+kubectl apply -f k8s/ns/and namespace.yaml  -n rossmann  # actually applied by CI
+
+# 2. Install the ALB ingress controller ONCE (Yandex Application Load Balancer)
+#    https://yandex.cloud/ru/docs/managed-kubernetes/operations/applications/alb-ingress-controller
+#    (yc-alb-ingress-controller Helm chart), then fill the placeholders in:
+#    k8s/ingress.yaml -> ingress.alb.yc.io/subnets / security-groups
+```
+
+| File | Contents |
+|------|----------|
+| `k8s/postgres.yaml` | Postgres **StatefulSet** + headless `Service` + `PVC` (2 Gi) + credentials Secret |
+| `k8s/api.yaml` | `ts-api` **Deployment** (x2) + `Service`, `DATABASE_URL` from Secret, probes |
+| `k8s/ui.yaml` | `ts-ui` **Deployment** + `Service` (nginx, proxies `/predict` to api) |
+| `k8s/ingress.yaml` | ALB Ingress, all traffic → `ts-ui` |
+| `k8s/ci-deployer.yaml` | `ServiceAccount ci-deployer` + Role/RoleBinding for CI |
+
+`DATABASE_URL` points at `postgres:5432` inside the cluster, so the API talks to the StatefulSet without exposing the DB outside.
 
 ---
 
@@ -160,6 +190,7 @@ Or, if you keep `history.csv` around, just run `scripts/migrate_db.py` against t
 │   └── static/               # styles, sample workbook
 ├── scripts/
 │   └── migrate_db.py         # one-time DB load from history.csv
+├── k8s/                      # Kubernetes manifests (postgres, api, ui, ingress, CI RBAC)
 ├── tests/                    # smoke tests
 ├── Dockerfile.api
 ├── Dockerfile.ui

@@ -1,5 +1,6 @@
 stages:
   - build
+  - deploy
 
 variables:
   REGISTRY_ENDPOINT: "cr.yandex"
@@ -46,3 +47,52 @@ build-ui:
       --destination "${UI_IMAGE}:${CI_COMMIT_SHA}"
       --destination "${UI_IMAGE}:latest"
       --cache=true
+
+# Deploys the built images into the k8s cluster (only on main).
+# Auth: builds a kubeconfig from CI variables (token of the `ci-deployer`
+# ServiceAccount defined in k8s/ci-deployer.yaml).
+deploy:
+  stage: deploy
+  image:
+    name: bitnami/kubectl:1.30
+    entrypoint: [""]
+  only:
+    - main
+  variables:
+    NAMESPACE: rossmann
+  before_script:
+    - mkdir -p "$HOME/.kube"
+    - |
+      cat > "$HOME/.kube/config" <<EOF
+      apiVersion: v1
+      kind: Config
+      clusters:
+        - cluster:
+            server: "${K8S_APISERVER}"
+            certificate-authority-data: "${K8S_CA_CERT}"
+          name: cluster
+      contexts:
+        - context:
+            cluster: cluster
+            user: ci-deployer
+            namespace: ${NAMESPACE}
+          name: deploy
+      current-context: deploy
+      users:
+        - name: ci-deployer
+          user:
+            token: "${K8S_SA_TOKEN}"
+      EOF
+  script:
+    - kubectl version --client 2>/dev/null || true
+    - kubectl get ns ${NAMESPACE} || kubectl create ns ${NAMESPACE}
+    - kubectl apply -f k8s/ -n ${NAMESPACE}
+    - kubectl create secret docker-registry cr-yandex
+        --docker-server=cr.yandex
+        --docker-username=json_key
+        --docker-password="$(cat "$YC_SA_KEY")"
+        -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl set image deployment/ts-api ts-api=${API_IMAGE}:${CI_COMMIT_SHA} -n ${NAMESPACE} --record
+    - kubectl set image deployment/ts-ui ts-ui=${UI_IMAGE}:${CI_COMMIT_SHA} -n ${NAMESPACE} --record
+    - kubectl rollout status deployment/ts-api -n ${NAMESPACE} --timeout=120s
+    - kubectl rollout status deployment/ts-ui -n ${NAMESPACE} --timeout=120s

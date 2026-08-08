@@ -16,6 +16,16 @@ app = FastAPI(
 model, scaler, imputer, config = load_artifacts()
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/")
+async def root():
+    return {"name": "Rossmann Forecasting API", "predict": "/predict", "docs": "/docs"}
+
+
 @app.post("/predict")
 async def predict(data: UploadFile = File()):
     content = await data.read()

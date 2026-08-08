@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ts-ui
+  namespace: rossmann
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ts-ui
+  template:
+    metadata:
+      labels:
+        app: ts-ui
+    spec:
+      imagePullSecrets:
+        - name: cr-yandex
+      containers:
+        - name: ts-ui
+          image: cr.yandex/crp76t66v12au4b36gbk/ts-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 200m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ts-ui
+  namespace: rossmann
+spec:
+  selector:
+    app: ts-ui
+  ports:
+    - port: 80
+      targetPort: 80

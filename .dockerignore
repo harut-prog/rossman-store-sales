@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Notebooks / data / logs
+project.ipynb
+history.csv
+catboost_info/
+tests/
+
+# Environments & secrets
+.env
+.env.*
+sa_key.json
+
+# K8s + CI (not needed inside the app images)
+k8s/
+.gitlab-ci.yml
+Dockerfile.api
+Dockerfile.ui
+docker-compose.yml
+
+# Git
+.git
+.gitignore

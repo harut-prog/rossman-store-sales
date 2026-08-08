@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rossmann-ingress
+  namespace: rossmann
+  annotations:
+    ingress.alb.yc.io/group-name: rossmann
+    ingress.alb.yc.io/subnets: <SUBNET_IDS_COMMA_SEPARATED>
+    ingress.alb.yc.io/external-ipv4-address: auto
+    ingress.alb.yc.io/security-groups: <SECURITY_GROUP_ID>
+spec:
+  ingressClassName: yc-alb
+  defaultBackend:
+    service:
+      name: ts-ui
+      port:
+        number: 80

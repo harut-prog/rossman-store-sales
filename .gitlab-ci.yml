@@ -25,7 +25,6 @@ build-api:
       /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/Dockerfile.api"
-      --destination "${API_IMAGE}:${CI_COMMIT_SHA}"
       --destination "${API_IMAGE}:latest"
       --cache=true
       --snapshot-mode=redo
@@ -38,7 +37,6 @@ build-ui:
       /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/Dockerfile.ui"
-      --destination "${UI_IMAGE}:${CI_COMMIT_SHA}"
       --destination "${UI_IMAGE}:latest"
       --cache=true
       --snapshot-mode=redo
@@ -48,7 +46,7 @@ build-ui:
 deploy:
   stage: deploy
   image:
-    name: bitnami/kubectl:1.30
+    name: bitnamilegacy/kubectl:1.30.7-debian-12-r1
     entrypoint: [""]
   only:
     - main
@@ -86,7 +84,7 @@ deploy:
         --docker-username=json_key
         --docker-password="$(cat "$YC_SA_KEY")"
         -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl set image deployment/ts-api ts-api=${API_IMAGE}:${CI_COMMIT_SHA} -n ${NAMESPACE} --record
-    - kubectl set image deployment/ts-ui ts-ui=${UI_IMAGE}:${CI_COMMIT_SHA} -n ${NAMESPACE} --record
+    - kubectl set image deployment/ts-api ts-api=${API_IMAGE}:latest -n ${NAMESPACE} --record
+    - kubectl set image deployment/ts-ui ts-ui=${UI_IMAGE}:latest -n ${NAMESPACE} --record
     - kubectl rollout status deployment/ts-api -n ${NAMESPACE} --timeout=120s
     - kubectl rollout status deployment/ts-ui -n ${NAMESPACE} --timeout=120s

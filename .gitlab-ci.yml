@@ -19,8 +19,9 @@ variables:
   before_script:
     # Yandex Container Registry auth: username=json_key, password=authorized key.
     # Builds a docker-style config.json so kaniko can push to cr.yandex.
-    - echo "$YC_SA_KEY" > /tmp/sa_key.json
-    - AUTH=$(echo -n "json_key:$(cat /tmp/sa_key.json)" | base64 -w0 | tr -d '\n')
+    - mkdir -p /kaniko/.docker
+    - echo "$YC_SA_KEY" > /kaniko/.docker/sa_key.json
+    - AUTH=$(echo -n "json_key:$(cat /kaniko/.docker/sa_key.json)" | base64 -w0 | tr -d '\n')
     - echo "{\"auths\":{\"$REGISTRY_ENDPOINT\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
 
 build-api:

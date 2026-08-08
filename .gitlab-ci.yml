@@ -7,21 +7,13 @@ variables:
   REGISTRY_ID: "crp76t66v12au4b36gbk"
   API_IMAGE: "$REGISTRY_ENDPOINT/$REGISTRY_ID/ts-api"
   UI_IMAGE: "$REGISTRY_ENDPOINT/$REGISTRY_ID/ts-ui"
-  # Unused — kept for reference: postgres image is NOT copied on every build anymore.
-  # DB data lives in the cloud DB and is migrated once via scripts/migrate_db.py.
-
-# Build job template: kaniko builds without a Docker daemon,
-# so no dind/privileged/network headaches in the k8s runner.
+  
 .kaniko-build: &kaniko-build
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
 before_script:
-    # Yandex Container Registry auth: username=json_key, password=authorized key.
-    # YC_SA_KEY is a GitLab "File" variable, so $YC_SA_KEY is a path
-    # to the authorized-key JSON inside the job container.
-    # Build a docker-style config.json so kaniko can push to cr.yandex.
     - mkdir -p /kaniko/.docker
     - AUTH=$(echo -n "json_key:$(cat "$YC_SA_KEY")" | base64 -w0 | tr -d '\n')
     - echo "{\"auths\":{\"$REGISTRY_ENDPOINT\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
@@ -36,6 +28,8 @@ build-api:
       --destination "${API_IMAGE}:${CI_COMMIT_SHA}"
       --destination "${API_IMAGE}:latest"
       --cache=true
+      --snapshot-mode=redo
+      --single-snapshot
 
 build-ui:
   <<: *kaniko-build
@@ -47,10 +41,10 @@ build-ui:
       --destination "${UI_IMAGE}:${CI_COMMIT_SHA}"
       --destination "${UI_IMAGE}:latest"
       --cache=true
+      --snapshot-mode=redo
+      --single-snapshot
 
-# Deploys the built images into the k8s cluster (only on main).
-# Auth: builds a kubeconfig from CI variables (token of the `ci-deployer`
-# ServiceAccount defined in k8s/ci-deployer.yaml).
+
 deploy:
   stage: deploy
   image:

@@ -16,12 +16,13 @@ variables:
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
-  before_script:
+before_script:
     # Yandex Container Registry auth: username=json_key, password=authorized key.
-    # Builds a docker-style config.json so kaniko can push to cr.yandex.
+    # YC_SA_KEY is a GitLab "File" variable, so $YC_SA_KEY is a path
+    # to the authorized-key JSON inside the job container.
+    # Build a docker-style config.json so kaniko can push to cr.yandex.
     - mkdir -p /kaniko/.docker
-    - echo "$YC_SA_KEY" > /kaniko/.docker/sa_key.json
-    - AUTH=$(echo -n "json_key:$(cat /kaniko/.docker/sa_key.json)" | base64 -w0 | tr -d '\n')
+    - AUTH=$(echo -n "json_key:$(cat "$YC_SA_KEY")" | base64 -w0 | tr -d '\n')
     - echo "{\"auths\":{\"$REGISTRY_ENDPOINT\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
 
 build-api:

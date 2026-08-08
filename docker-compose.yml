@@ -1,8 +1,8 @@
 services:
-  ts_api:
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.api
     container_name: ts_api
     environment:
       - PYTHONWARNINGS=ignore
@@ -12,8 +12,16 @@ services:
     ports:
       - "8000:8000"
 
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: ts_ui
+    ports:
+      - "8080:80"
+
   db:
-    image: postgres:17
+    image: postgres:17-alpine
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

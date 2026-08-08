@@ -1,23 +1,19 @@
 from io import BytesIO
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from pipeline import load_artifacts, run_pipeline, validate_columns, validate_data
 
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app = FastAPI(
+    title="Rossmann Forecasting API",
+    version="0.1.0",
+    description="Multi-horizon sales forecasting backend (LightGBM/CatBoost).",
+)
+
 model, scaler, imputer, config = load_artifacts()
-
-
-@app.get("/")
-async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
 
 
 @app.post("/predict")

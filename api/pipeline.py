@@ -27,7 +27,11 @@ MONTHS_MAP = {
 }
 
 
-def load_artifacts(model_dir="best_model"):
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def load_artifacts(model_dir=None):
+    model_dir = model_dir or os.path.join(BASE_DIR, "best_model")
     untrusted = get_untrusted_types(file=f"{model_dir}/model.skops")
     model = skops_load(f"{model_dir}/model.skops", trusted=untrusted)
     with open(f"{model_dir}/scaler.pkl", "rb") as f:

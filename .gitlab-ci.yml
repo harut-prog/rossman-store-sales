@@ -3,23 +3,44 @@ stages:
 
 variables:
   REGISTRY_ENDPOINT: "cr.yandex"
-  UPSTREAM_DB_IMAGE: "postgres:17"
-  TARGET_DB_NAME: "db"
-  TARGET_API_NAME: "ts-api"
-  REGISTRY_ID: "crp76t66v12au4b36gbk" 
+  REGISTRY_ID: "crp76t66v12au4b36gbk"
+  API_IMAGE: "$REGISTRY_ENDPOINT/$REGISTRY_ID/ts-api"
+  UI_IMAGE: "$REGISTRY_ENDPOINT/$REGISTRY_ID/ts-ui"
+  # Unused — kept for reference: postgres image is NOT copied on every build anymore.
+  # DB data lives in the cloud DB and is migrated once via scripts/migrate_db.py.
 
-build-api:
+# Build job template: kaniko builds without a Docker daemon,
+# so no dind/privileged/network headaches in the k8s runner.
+.kaniko-build: &kaniko-build
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
+  before_script:
+    # Yandex Container Registry auth: username=json_key, password=authorized key.
+    # Builds a docker-style config.json so kaniko can push to cr.yandex.
+    - echo "$YC_SA_KEY" > /tmp/sa_key.json
+    - AUTH=$(echo -n "json_key:$(cat /tmp/sa_key.json)" | base64 -w0 | tr -d '\n')
+    - echo "{\"auths\":{\"$REGISTRY_ENDPOINT\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
+
+build-api:
+  <<: *kaniko-build
   script:
-    - mkdir -p /kaniko/.docker
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n "json_key:${CI_REGISTRY_KEY}" | base64 | tr -d '\n' )\"}}}" > /kaniko/.docker/config.json
-    - >
+    - >-
       /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
-      --destination "${REGISTRY_ENDPOINT}/${REGISTRY_ID}/${TARGET_API_NAME}:${CI_COMMIT_SHA}"
-      --destination "${REGISTRY_ENDPOINT}/${REGISTRY_ID}/${TARGET_API_NAME}:latest"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile.api"
+      --destination "${API_IMAGE}:${CI_COMMIT_SHA}"
+      --destination "${API_IMAGE}:latest"
+      --cache=true
+
+build-ui:
+  <<: *kaniko-build
+  script:
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile.ui"
+      --destination "${UI_IMAGE}:${CI_COMMIT_SHA}"
+      --destination "${UI_IMAGE}:latest"
       --cache=true
